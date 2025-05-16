@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Capitalization Checkpoint!</title>
+  <style>
+    * { box-sizing: border-box; font-family: sans-serif; }
+    body { margin: 0; background: #f4f4f4; overflow-x: hidden; }
+    .game-container {
+      max-width: 900px;
+      margin: auto;
+      padding: 10px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 { text-align: center; color: #3f51b5; margin-bottom: 5px; }
+    .instructions {
+      text-align: center;
+      font-size: 16px;
+      margin-bottom: 15px;
+      padding: 10px;
+      background: #e8f0fe;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .controls, .scoreboard { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    button, select {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    #conveyor {
+      display: flex;
+      overflow: hidden;
+      border-top: 2px solid #ccc;
+      border-bottom: 2px solid #ccc;
+      padding: 20px;
+      height: 80px;
+      position: relative;
+      background: #eef2f9;
+    }
+    .word {
+      background: #fff;
+      border: 2px solid #3f51b5;
+      color: #3f51b5;
+      padding: 10px 20px;
+      border-radius: 30px;
+      margin-right: 20px;
+      white-space: nowrap;
+      font-weight: bold;
+      position: absolute;
+      top: 20px;
+      transition: left 0.05s linear;
+    }
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 10px;
+    }
+    .feedback {
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 10px;
+      height: 30px;
+    }
+    .praise { color: green; }
+    .sarcasm { color: darkred; }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>Capitalization Checkpoint!</h1>
+    <div class="instructions">
+      Words will scroll across the screen. Each one is either capitalized correctly or incorrectly. <br>
+      Your job: click <strong>Correct</strong> if the word is capitalized properly, or <strong>Incorrect</strong> if it's not. <br>
+      Choose your game time and speed, and let's see if you're worthy of Mr. Markuss's approval.
+    </div>
+    <div class="controls">
+      <select id="duration">
+        <option value="30">30 seconds</option>
+        <option value="60" selected>1 minute</option>
+        <option value="90">1:30 minutes</option>
+        <option value="120">2 minutes</option>
+      </select>
+      <select id="speed">
+        <option value="2">Slow</option>
+        <option value="4" selected>Medium</option>
+        <option value="6">Fast</option>
+      </select>
+      <button onclick="startGame()">Start</button>
+      <button onclick="pauseGame()">Pause</button>
+      <button onclick="resumeGame()">Resume</button>
+      <button onclick="stopGame()">Stop</button>
+    </div>
+    <div class="scoreboard">
+      <div>⏱️ Time: <span id="timer">0</span>s</div>
+      <div>🎯 Score: <span id="score">0</span></div>
+    </div>
+    <div id="conveyor"></div>
+    <div class="actions">
+      <button onclick="checkAnswer(true)">Correct</button>
+      <button onclick="checkAnswer(false)">Incorrect</button>
+    </div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+
+  <script>
+    const properWords = [
+      'Ms. Jenkins', 'Taco Bell', 'Mr. Markuss', 'New York', 'Facebook',
+      'Martin Luther King Jr.', 'Starbucks', 'Jackson Middle School', 'California',
+      'Barack Obama', 'Google', 'Mount Everest', 'Amazon', 'Christmas',
+      'Dr. Smith', 'Paris', 'Tesla', 'McDonald’s', 'Harvard University',
+      'Central Park', 'Lincoln Memorial', 'NASA', 'The White House'
+    ];
+
+    const commonWords = [
+      'dog', 'car', 'school', 'computer', 'book', 'shoe', 'street',
+      'chair', 'pencil', 'city', 'teacher', 'holiday', 'restaurant',
+      'scientist', 'building', 'president', 'platform', 'company', 'park'
+    ];
+
+    const allWords = [...properWords, ...commonWords];
+
+    function randomizeCapitalization(word, isProper) {
+      const shouldBeCorrect = Math.random() > 0.5;
+      const correctlyCapitalized = isProper ? capitalize(word) : word.toLowerCase();
+      const incorrectlyCapitalized = isProper ? word.toLowerCase() : capitalize(word);
+      return {
+        display: shouldBeCorrect ? correctlyCapitalized : incorrectlyCapitalized,
+        isCorrect: shouldBeCorrect
+      };
+    }
+
+    function capitalize(str) {
+      return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    let conveyor = document.getElementById('conveyor');
+    let score = 0;
+    let timeLeft = 60;
+    let gameInterval, moveInterval, currentWord = null;
+    let paused = false;
+    let gameSpeed = 4;
+
+    function startGame() {
+      score = 0;
+      document.getElementById('score').textContent = score;
+      timeLeft = parseInt(document.getElementById('duration').value);
+      document.getElementById('timer').textContent = timeLeft;
+      gameSpeed = parseInt(document.getElementById('speed').value);
+      document.getElementById('feedback').textContent = '';
+      conveyor.innerHTML = '';
+      spawnWord();
+      gameInterval = setInterval(() => {
+        if (!paused) {
+          timeLeft--;
+          document.getElementById('timer').textContent = timeLeft;
+          if (timeLeft <= 0) stopGame();
+        }
+      }, 1000);
+    }
+
+    function stopGame() {
+      clearInterval(gameInterval);
+      clearInterval(moveInterval);
+      currentWord = null;
+      document.getElementById('feedback').textContent = 'Game Over!';
+    }
+
+    function pauseGame() { paused = true; }
+    function resumeGame() { paused = false; }
+
+    function spawnWord() {
+      const wordText = allWords[Math.floor(Math.random() * allWords.length)];
+      const isProper = properWords.includes(wordText);
+      const { display, isCorrect } = randomizeCapitalization(wordText, isProper);
+      const wordDiv = document.createElement('div');
+      wordDiv.className = 'word';
+      wordDiv.textContent = display;
+      wordDiv.style.left = '0px';
+      conveyor.innerHTML = '';
+      conveyor.appendChild(wordDiv);
+      currentWord = { display, isCorrect };
+
+      let left = 0;
+      moveInterval = setInterval(() => {
+        if (!paused) {
+          left += gameSpeed;
+          wordDiv.style.left = `${left}px`;
+          if (left > conveyor.offsetWidth) {
+            clearInterval(moveInterval);
+            spawnWord();
+          }
+        }
+      }, 50);
+    }
+
+    function checkAnswer(playerThinksCorrect) {
+      if (!currentWord) return;
+      const correct = playerThinksCorrect === currentWord.isCorrect;
+      score += correct ? 1 : -1;
+      document.getElementById('score').textContent = score;
+      const feedback = document.getElementById('feedback');
+      feedback.className = 'feedback ' + (correct ? 'praise' : 'sarcasm');
+      feedback.textContent = correct
+        ? getPraise()
+        : getSarcasm();
+      clearInterval(moveInterval);
+      conveyor.innerHTML = '';
+      spawnWord();
+    }
+
+    function getPraise() {
+      const phrases = [
+        "You're the capital of smart!",
+        "That’s how it’s done, scholar!",
+        "Correct! Grammar royalty in the house."
+      ];
+      return phrases[Math.floor(Math.random() * phrases.length)];
+    }
+
+    function getSarcasm() {
+      const burns = [
+        "You just offended every English teacher.",
+        "You might need a grammar helmet.",
+        "Even autocorrect gave up on you."
+      ];
+      return burns[Math.floor(Math.random() * burns.length)];
+    }
+  </script>
+</body>
+</html>
